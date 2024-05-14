@@ -17,8 +17,9 @@ RESOURCE = Path("Resources/qcalgorithm-api")
 INDICATOR_RESOURCE = Path("Resources/indicators/constructors")
 METADATA = WRITE_PATH / "metadata.json"
 DOCS_SECTION = {
-    "QCAlgorithm API": "QuantConnect.Algorithm.QCAlgorithm",
-    "Candlestick Patterns": "QuantConnect.Algorithm.CandlestickPatterns"
+    "QCAlgorithm API": ("QuantConnect.Algorithm.QCAlgorithm", False),
+    "Candlestick Patterns": ("QuantConnect.Algorithm.CandlestickPatterns", "partial"),
+    "Extensions": ("QuantConnect.Extensions", "extensions")
 }
 MAX_RECURSION = 1
 XML_REGEX_PATTERNS = {
@@ -74,11 +75,9 @@ def render_docs():
         shutil.rmtree(INDICATOR_RESOURCE)
     INDICATOR_RESOURCE.mkdir(parents=True, exist_ok=True)
 
-    for i, (h3, type_json_url) in enumerate(DOCS_SECTION.items()):
-        if i == 0:
-            write = False
-        else:
-            write = "partial"
+    for i, (h3, val) in enumerate(DOCS_SECTION.items()):
+        type_json_url= val[0] 
+        write = val[1]
         _render_section_docs(i, h3, type_json_url, write=write)
         DONE.append(h3.strip().lower())
     
@@ -169,9 +168,9 @@ def _render_section_docs_by_language(i, h3, type_json_url, language, write=False
         return
     
     type_heading_html = _render_type_heading(content["type-name"], content["base-type-full-name"].split('.')[-1], content["description"], content["full-type-name"])
-    methods = _render_methods(content["methods"], language, 'QuantConnect.Securities' in type_json_url)
-    properties = _render_properties(content["properties"], language)
-    fields = _render_fields(content["fields"], language)
+    methods = _render_methods(content["methods"], language, 'QuantConnect.Securities' in type_json_url, write=write)
+    properties = _render_properties(content["properties"], language, write=write)
+    fields = _render_fields(content["fields"], language, write=write)
     
     if write:
         if language == "python":
@@ -218,19 +217,21 @@ def _render_type_heading(type_name, type_base_type, type_description, type_full_
 <p>{extract_xml_content(type_description, XML_REGEX_PATTERNS)}</p>
 '''
 
-def _render_types(type_, type_list, language):
+def _render_types(type_, type_list, language, write=False):
     types = []
     for type in sorted(type_list, key=lambda x: x[f"{type_}-name"]):
-        type_html = eval(f"_render_{type_}(type, language)")
+        type_html = eval(f"_render_{type_}(type, language, write)")
         types.append(type_html)
     return '\n'.join(types)
 
-def _render_type(type_, type_dict, language, type_ret="short-type-name", line_arg="", params=""):
+def _render_type(type_, type_dict, language, type_ret="short-type-name", line_arg="", params="", write=False):
     doc_attr = type_dict["documentation-attributes"][0] if "documentation-attributes" in type_dict and len(type_dict["documentation-attributes"]) > 0 else None
     line = doc_attr["line"] if doc_attr else None
     source_url = f'{doc_attr["fileName"]}#L{line}' if doc_attr else None
     
     type_name = type_dict[f"{type_}-{type_ret}"]
+    if isinstance(type_name, list):
+        type_name = type_name[0]
     if type_name:
         type_return = eval(f'_get_{type_}_return(type_name, type_dict["{type_}-description"], source_url, line, language)')
     else:
@@ -245,7 +246,7 @@ def _render_type(type_, type_dict, language, type_ret="short-type-name", line_ar
 {type_return}
 </div>
 '''
-    if doc_attr or (type_name and type_name.split('.')[-1] in SUPPORTED_CANDLES):
+    if doc_attr or (type_name and type_name.split('.')[-1] in SUPPORTED_CANDLES) or write == "extensions":
         if doc_attr:
             if language == "python":
                 filename = f'qcalgorithm-{title_to_dash_linked_lower_case(type_dict[f"{type_}-name"].split(".")[-1]).replace("_", "-")}.html'
@@ -257,13 +258,18 @@ def _render_type(type_, type_dict, language, type_ret="short-type-name", line_ar
             
             if not (RESOURCE / filename).exists():
                 DOCS_ATTR[doc_attr["tag"]].append(f"<? include(DOCS_RESOURCES.\"/qcalgorithm-api/{filename}\"); ?>")
-                
+            
         else:
             if language == "python":
                 filename = f'qcalgorithm-{type_dict[f"{type_}-name"].split(".")[-1].replace("_", "").lower()}.html'
             else:
                 filename = f'qcalgorithm-{type_dict[f"{type_}-name"].lower()}.html'
             
+        if write == "extensions":
+            if not (RESOURCE / filename).exists():
+                with open(WRITE_PATH / f"98 Extensions.php", 'a', encoding="utf-8") as file:
+                    file.write(f"<? include(DOCS_RESOURCES.\"/qcalgorithm-api/{filename}\"); ?>\n")
+                
         with open(RESOURCE / filename, 'a', encoding="utf-8") as file:
             html = f"<div class=\"{language}\">\n"
             html += type_html
@@ -272,7 +278,7 @@ def _render_type(type_, type_dict, language, type_ret="short-type-name", line_ar
 
     return type_html
 
-def _render_methods(method_list, language, special_type=False):
+def _render_methods(method_list, language, special_type=False, write=False):
     backlist = ['compare_to', 'equals', 'to_string', 'get_hash_code', 
                 'CompareTo', 'Equals', 'ToString', 'GetHashCode']
     if special_type:
@@ -287,7 +293,7 @@ def _render_methods(method_list, language, special_type=False):
         types.append(type_html)
     return '\n'.join(types)
 
-def _render_method(method_dict_list, language):
+def _render_method(method_dict_list, language, write=False):
     if len(method_dict_list) == 1:
         method_dicts = method_dict_list
     else:
@@ -327,7 +333,7 @@ def _render_method(method_dict_list, language):
         line = doc_attr["line"] if doc_attr else None
         source_url = f'{doc_attr["fileName"]}#L{line}' if doc_attr else None
         method_params = _get_params(method_dict["method-arguments"], source_url, line, language)
-        method_html += _render_type("method", method_dict, language, "return-type-full-name", f"({line_arguments})", method_params)
+        method_html += _render_type("method", method_dict, language, "return-type-full-name", f"({line_arguments})", method_params, write=write)
     
     return method_html
 
@@ -506,20 +512,20 @@ def _get_hyperlinked_type(type_raw_name, language):
     
     return _type
                 
-def _render_properties(property_list, language):
-    return _render_types("property", property_list, language)
+def _render_properties(property_list, language, write=False):
+    return _render_types("property", property_list, language, write=write)
 
-def _render_property(property_dict, language):
-    return _render_type("property", property_dict, language)
+def _render_property(property_dict, language, write=False):
+    return _render_type("property", property_dict, language, write=write)
 
 def _get_property_return(return_type_name, description, source_url, line_num, language):
     return _get_return("property", return_type_name, description, source_url, line_num, language)
                 
-def _render_fields(field_list, language):
-    return _render_types("field", field_list, language)
+def _render_fields(field_list, language, write=False):
+    return _render_types("field", field_list, language, write=write)
 
-def _render_field(field_dict, language):
-    return _render_type("field", field_dict, language)
+def _render_field(field_dict, language, write=False):
+    return _render_type("field", field_dict, language, write=write)
 
 def _get_field_return(return_type_name, description, source_url, line_num, language):
     return _get_return("field", return_type_name, description, source_url, line_num, language)
