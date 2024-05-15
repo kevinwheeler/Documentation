@@ -27,7 +27,8 @@ public override void Initialize()
     option.SetFilter(-10, 10, 0, 30)<br></pre>
     </div>
 
-    <li>In the <code class="csharp">OnData</code><code class="python">on_data</code> method, select the Option contracts.</li>
+    <li>In the <code class="csharp">OnData</code><code class="python">on_data</code> method, select the Option expiry and strikes.</li>
+    <p>Note that the call strike must be greater than the put strike.</p>
     <div class="section-example-container">
         <pre class="csharp">public override void OnData(Slice slice)
 {
@@ -45,9 +46,9 @@ public override void Initialize()
     var puts = chain.Where(x =&gt; x.Expiry == expiry &amp;&amp; x.Right == OptionRight.Put);
     if (calls.Count() == 0 || puts.Count() == 0) return;
 
-    // Select the OTM contracts
-    var call = calls.OrderBy(x =&gt; x.Strike).Last();
-    var put = puts.OrderBy(x =&gt; x.Strike).First();<br></pre>
+    // Select the strike prices of the OTM contracts
+    var callStrike = calls.OrderBy(x =&gt; x.Strike).Last().Strike;
+    var putStrike = puts.OrderBy(x =&gt; x.Strike).First().Strike;<br></pre>
         <pre class="python">def on_data(self, slice: Slice) -&gt; None:
     if self.portfolio.invested: return
 
@@ -63,18 +64,21 @@ public override void Initialize()
     puts = [x for x in chain if x.right == OptionRight.PUT and x.expiry == expiry]
     if not calls or not puts: return
 
-    # Select the OTM contracts
-    call = sorted(calls, key = lambda x: x.strike)[-1]
-    put = sorted(puts, key = lambda x: x.strike)[0]</pre>
+    # Select the strike prices of the OTM contracts
+    call_strike = sorted(calls, key = lambda x: x.strike)[-1].strike
+    put_strike = sorted(puts, key = lambda x: x.strike)[0].strike</pre>
     </div>
 
-    <li>In the <code class="csharp">OnData</code><code class="python">on_data</code> method, submit the orders.</li>
+    <li>In the <code class="csharp">OnData</code><code class="python">on_data</code> method, call the <code>OptionStrategies.CoveredCall</code> method and then submit the order.</li>
     <div class="section-example-container">
-        <pre class="csharp">Sell(call.Symbol, 1);    // Sell the OTM call
-Buy(put.Symbol, 1);      // Buy the OTM call
-Buy(_equitySymbol, 100); // Buy 100 shares of the underlying stock<br></pre>
-                <pre class="python">self.Sell(call.Symbol, 1)          # Sell the OTM call
-self.Buy(put.Symbol, 1)            # Buy the OTM put
-self.Buy(self.equity_symbol, 100)  # Buy 100 shares of the underlying stock<br></pre>
+        <pre class="csharp">    var protectiveCollar = OptionStrategies.ProtectiveCollar(_symbol, callStrike, putStrike, expiry);
+    Buy(protectiveCollar, 1);
+}</pre>
+        <pre class="python">protective_collar = OptionStrategies.protective_collar(self._symbol, call_strike, put_strike, expiry)
+self.buy(protective_collar, 1)</pre>
     </div>
+<?php 
+$methodNames = array("Buy");
+include(DOCS_RESOURCES."/trading-and-orders/option-strategy-extra-args.php"); 
+?>
 </ol>
