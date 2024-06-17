@@ -133,6 +133,9 @@ namespace UrlCheck
                                     .Replace("look ahead", "look-ahead") // special case
                                     .Replace("profit loss", "profit-loss") // special case
                                     .Replace("out of the money", "out-of-the-money") // special case
+                                    .Replace("Third Party", "Third-Party") // special case
+                                    .Replace("Fine Tune", "Fine-Tune") // special case
+                                    .Replace("Pre Trained", "Pre-Trained") // special case
                                     .Replace("Built in", "Built-in") // special case
                                     .Replace("C and Visual Studio", "C# and Visual Studio") // special case
                                     .Replace("C and VS Code", "C# and VS Code") // special case
